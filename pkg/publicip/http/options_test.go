@@ -20,7 +20,7 @@ func Test_newDefaultSettings(t *testing.T) {
 	assert.GreaterOrEqual(t, int(settings.timeout), int(time.Millisecond))
 }
 
-func Test_SetProvidersIP(t *testing.T) { //nolint:dupl
+func Test_SetProvidersIP(t *testing.T) {
 	t.Parallel()
 
 	testCases := map[string]struct {
@@ -29,29 +29,18 @@ func Test_SetProvidersIP(t *testing.T) { //nolint:dupl
 		expectedSettings settings
 		err              error
 	}{
-		"Google": {
+		"Ipify": {
 			initialSettings: settings{
-				providersIP: []Provider{Opendns},
+				providersIP: []Provider{Ifconfig},
 			},
-			providers: []Provider{Google},
+			providers: []Provider{Ipify},
 			expectedSettings: settings{
-				providersIP: []Provider{Google},
+				providersIP: []Provider{Ipify},
 			},
-		},
-		"bad provider for IP version": {
-			initialSettings: settings{
-				providersIP: []Provider{Opendns},
-			},
-			providers: []Provider{Noip},
-			expectedSettings: settings{
-				providersIP: []Provider{Opendns},
-			},
-			err: errors.New(`provider does not support IP version: "noip" for version ipv4 or ipv6`),
 		},
 	}
 
 	for name, testCase := range testCases {
-		testCase := testCase
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
@@ -72,7 +61,7 @@ func Test_SetProvidersIP(t *testing.T) { //nolint:dupl
 	}
 }
 
-func Test_SetProvidersIP4(t *testing.T) { //nolint:dupl
+func Test_SetProvidersIP4(t *testing.T) {
 	t.Parallel()
 
 	testCases := map[string]struct {
@@ -81,29 +70,28 @@ func Test_SetProvidersIP4(t *testing.T) { //nolint:dupl
 		expectedSettings settings
 		err              error
 	}{
-		"NoIP": {
+		"Ipify": {
 			initialSettings: settings{
 				providersIP4: []Provider{Ipify},
 			},
-			providers: []Provider{Noip},
+			providers: []Provider{Ipify},
 			expectedSettings: settings{
-				providersIP4: []Provider{Noip},
+				providersIP4: []Provider{Ipify},
 			},
 		},
 		"bad provider for IP version": {
 			initialSettings: settings{
 				providersIP4: []Provider{Ipify},
 			},
-			providers: []Provider{Opendns},
+			providers: []Provider{Ifconfig},
 			expectedSettings: settings{
 				providersIP4: []Provider{Ipify},
 			},
-			err: errors.New(`provider does not support IP version: "opendns" for version ipv4`),
+			err: errors.New(`provider does not support IP version: "ifconfig" for version ipv4`),
 		},
 	}
 
 	for name, testCase := range testCases {
-		testCase := testCase
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
@@ -124,7 +112,7 @@ func Test_SetProvidersIP4(t *testing.T) { //nolint:dupl
 	}
 }
 
-func Test_SetProvidersIP6(t *testing.T) { //nolint:dupl
+func Test_SetProvidersIP6(t *testing.T) {
 	t.Parallel()
 
 	testCases := map[string]struct {
@@ -133,29 +121,28 @@ func Test_SetProvidersIP6(t *testing.T) { //nolint:dupl
 		expectedSettings settings
 		err              error
 	}{
-		"NoIP": {
+		"Ipify": {
 			initialSettings: settings{
 				providersIP6: []Provider{Ipify},
 			},
-			providers: []Provider{Noip},
+			providers: []Provider{Ipify},
 			expectedSettings: settings{
-				providersIP6: []Provider{Noip},
+				providersIP6: []Provider{Ipify},
 			},
 		},
 		"bad provider for IP version": {
 			initialSettings: settings{
 				providersIP6: []Provider{Ipify},
 			},
-			providers: []Provider{Opendns},
+			providers: []Provider{Ifconfig},
 			expectedSettings: settings{
 				providersIP6: []Provider{Ipify},
 			},
-			err: errors.New(`provider does not support IP version: "opendns" for version ipv6`),
+			err: errors.New(`provider does not support IP version: "ifconfig" for version ipv6`),
 		},
 	}
 
 	for name, testCase := range testCases {
-		testCase := testCase
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 

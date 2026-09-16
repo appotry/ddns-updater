@@ -1,74 +1,124 @@
-linters-settings:
-  maligned:
-    suggest-new: true
-  misspell:
-    locale: US
+version: "2"
 
-issues:
-  exclude-rules:
-    - path: cmd/updater/main.go
-      text: "mnd: Magic number: 4, in <argument> detected"
-      linters:
-        - gomnd
-    - path: cmd/updater/main.go
-      text: "mnd: Magic number: 2, in <argument> detected"
-      linters:
-        - gomnd
+formatters:
+  enable:
+    - gci
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 
 linters:
-  disable-all: true
+  settings:
+    misspell:
+      locale: US
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - containedctx
+          - dupl
+          - err113
+        path: _test\.go
+      - linters:
+          - contextcheck
+        text: Function `exitHealthchecksio` should pass the context parameter
+      - linters:
+          - lll
+        source: See https://
+      - linters:
+          - revive
+        text: "var-naming: avoid meaningless package names"
+        path: internal\/provider\/utils\/
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
   enable:
+    # - cyclop
+    - asasalint
     - asciicheck
+    - bidichk
     - bodyclose
-    - deadcode
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - decorder
     - dogsled
     - dupl
-    - errcheck
+    - dupword
+    - durationcheck
+    - err113
+    - errchkjson
+    - errname
+    - errorlint
     - exhaustive
-    - exportloopref
-    - gci
+    - fatcontext
+    - forcetypeassert
+    - gocheckcompilerdirectives
     - gochecknoglobals
     - gochecknoinits
+    - gochecksumtype
     - gocognit
     - goconst
     - gocritic
     - gocyclo
+    - godoclint
     - godot
     - goheader
-    - goimports
-    - gomnd
+    - gomoddirectives
     - goprintffuncname
     - gosec
-    # - goerr113 # TODO
-    - gosimple
-    - govet
+    - gosmopolitan
+    - grouper
     - importas
-    - ineffassign
+    - inamedparam
+    - interfacebloat
+    - intrange
+    - iotamixing
+    - ireturn
     - lll
+    - maintidx
+    - makezero
+    - mirror
     - misspell
+    - mnd
+    - modernize
+    - musttag
     - nakedret
     - nestif
     - nilerr
+    - nilnil
     - noctx
     - nolintlint
+    - nosprintfhostport
+    - paralleltest
+    - perfsprint
     - prealloc
     - predeclared
+    - promlinter
+    - protogetter
+    - reassign
+    - revive
     - rowserrcheck
-    - exportloopref
+    - sloglint
     - sqlclosecheck
-    - staticcheck
-    - structcheck
+    - tagalign
     - thelper
     - tparallel
-    - typecheck
     - unconvert
     - unparam
-    - unused
-    - varcheck
+    - usestdlibvars
     - wastedassign
     - whitespace
-
-run:
-  skip-dirs:
-    - .devcontainer
-    - .github
+    - zerologlint

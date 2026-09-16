@@ -2,31 +2,66 @@ package config
 
 import (
 	"fmt"
-	"net"
-	"strconv"
+	"net/url"
+	"os"
 
-	"github.com/qdm12/golibs/params"
+	"github.com/qdm12/gosettings"
+	"github.com/qdm12/gosettings/reader"
+	"github.com/qdm12/gosettings/validate"
+	"github.com/qdm12/gotree"
 )
 
 type Health struct {
-	ServerAddress string
-	Port          uint16 // obtained from ServerAddress
+	// ServerAddress is the listening address:port of the
+	// health server, which defaults to the empty string,
+	// meaning the server will not run.
+	ServerAddress         *string
+	HealthchecksioBaseURL string
+	HealthchecksioUUID    *string
 }
 
-func (h *Health) Get(env params.Interface) (warning string, err error) {
-	h.ServerAddress, warning, err = env.ListeningAddress(
-		"HEALTH_SERVER_ADDRESS", params.Default("127.0.0.1:9999"))
-	if err != nil {
-		return warning, fmt.Errorf("%w: for environment variable HEALTH_SERVER_ADDRESS", err)
+func (h *Health) SetDefaults() {
+	h.ServerAddress = gosettings.DefaultPointer(h.ServerAddress, "")
+	h.HealthchecksioBaseURL = gosettings.DefaultComparable(h.HealthchecksioBaseURL, "https://hc-ping.com")
+	h.HealthchecksioUUID = gosettings.DefaultPointer(h.HealthchecksioUUID, "")
+}
+
+func (h Health) Validate() (err error) {
+	if *h.ServerAddress != "" {
+		err = validate.ListeningAddress(*h.ServerAddress, os.Getuid())
+		if err != nil {
+			return fmt.Errorf("server listening address: %w", err)
+		}
 	}
-	_, portStr, err := net.SplitHostPort(h.ServerAddress)
+
+	_, err = url.Parse(h.HealthchecksioBaseURL)
 	if err != nil {
-		return warning, fmt.Errorf("%w: for environment variable HEALTH_SERVER_ADDRESS", err)
+		return fmt.Errorf("healthchecks.io base URL: %w", err)
 	}
-	port, err := strconv.Atoi(portStr)
-	if err != nil {
-		return warning, fmt.Errorf("%w: for environment variable HEALTH_SERVER_ADDRESS", err)
+
+	return nil
+}
+
+func (h Health) String() string {
+	return h.toLinesNode().String()
+}
+
+func (h Health) toLinesNode() *gotree.Node {
+	node := gotree.New("Health")
+	if *h.ServerAddress == "" {
+		node.Appendf("Server is disabled")
+	} else {
+		node.Appendf("Server listening address: %s", *h.ServerAddress)
 	}
-	h.Port = uint16(port)
-	return warning, nil
+	if *h.HealthchecksioUUID != "" {
+		node.Appendf("Healthchecks.io base URL: %s", h.HealthchecksioBaseURL)
+		node.Appendf("Healthchecks.io UUID: %s", *h.HealthchecksioUUID)
+	}
+	return node
+}
+
+func (h *Health) Read(r *reader.Reader) {
+	h.ServerAddress = r.Get("HEALTH_SERVER_ADDRESS")
+	h.HealthchecksioBaseURL = r.String("HEALTH_HEALTHCHECKSIO_BASE_URL")
+	h.HealthchecksioUUID = r.Get("HEALTH_HEALTHCHECKSIO_UUID", reader.ForceLowercase(false))
 }

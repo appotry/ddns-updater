@@ -11,12 +11,18 @@ type dataModel struct {
 }
 
 type record struct {
-	Domain string                `json:"domain"`
-	Host   string                `json:"host"`
+	Domain string `json:"domain"`
+	// Host is kept for retro-compatibility and is replaced by Owner.
+	Host   string                `json:"host,omitempty"`
+	Owner  string                `json:"owner"`
 	Events []models.HistoryEvent `json:"ips"`
 }
 
 func (r record) String() string {
-	b, _ := json.Marshal(r)
+	b, err := json.Marshal(r)
+	if err != nil {
+		panic(err)
+	}
+
 	return string(b)
 }

@@ -18,21 +18,23 @@ func Test_ListProvidersForVersion(t *testing.T) {
 		providers []Provider
 	}{
 		"ip4or6": {
-			version:   ipversion.IP4or6,
-			providers: []Provider{Google, Ifconfig, Ipinfo, Opendns},
+			version: ipversion.IP4or6,
+			providers: []Provider{
+				Ifconfig, Ipify, Ipinfo, Spdyn, Ipleak,
+				Icanhazip, Ident, Nnev, Wtfismyip, Seeip, Changeip,
+			},
 		},
 		"ip4": {
 			version:   ipversion.IP4,
-			providers: []Provider{Ipify, Noip},
+			providers: []Provider{Ipify, Ipleak, Icanhazip, Ident, Nnev, Wtfismyip, Seeip},
 		},
 		"ip6": {
 			version:   ipversion.IP6,
-			providers: []Provider{Ipify, Noip},
+			providers: []Provider{Ipify, Ipleak, Icanhazip, Ident, Nnev, Wtfismyip, Seeip},
 		},
 	}
 
 	for name, testCase := range testCases {
-		testCase := testCase
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			providers := ListProvidersForVersion(testCase.version)
@@ -50,7 +52,7 @@ func Test_ValidateProvider(t *testing.T) {
 		err      error
 	}{
 		"valid": {
-			provider: Google,
+			provider: Ifconfig,
 			version:  ipversion.IP4or6,
 		},
 		"custom url": {
@@ -58,19 +60,18 @@ func Test_ValidateProvider(t *testing.T) {
 			version:  ipversion.IP4or6,
 		},
 		"invalid for ip version": {
-			provider: Google,
+			provider: Ifconfig,
 			version:  ipversion.IP4,
-			err:      errors.New(`provider does not support IP version: "google" for version ipv4`),
+			err:      errors.New(`provider does not support IP version: "ifconfig" for version ipv4`),
 		},
 		"unknown": {
 			provider: Provider("unknown"),
 			version:  ipversion.IP4,
-			err:      errors.New("unknown provider: unknown"),
+			err:      errors.New("unknown public IP echo HTTP provider: unknown"),
 		},
 	}
 
 	for name, testCase := range testCases {
-		testCase := testCase
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			err := ValidateProvider(testCase.provider, testCase.version)

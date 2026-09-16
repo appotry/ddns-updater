@@ -1,11 +1,12 @@
 package config
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/qdm12/golibs/params"
+	"github.com/qdm12/gosettings"
+	"github.com/qdm12/gosettings/reader"
+	"github.com/qdm12/gotree"
 )
 
 type Update struct {
@@ -13,43 +14,51 @@ type Update struct {
 	Cooldown time.Duration
 }
 
-func (u *Update) get(env params.Interface) (warning string, err error) {
-	warning, err = u.getPeriod(env)
-	if err != nil {
-		return warning, err
-	}
-
-	u.Cooldown, err = env.Duration("UPDATE_COOLDOWN_PERIOD", params.Default("5m"))
-	if err != nil {
-		return "", fmt.Errorf("%w: for environment variable UPDATE_COOLDOWN_PERIOD", err)
-	}
-
-	return warning, nil
+func (u *Update) setDefaults() {
+	const defaultPeriod = 5 * time.Minute
+	u.Period = gosettings.DefaultComparable(u.Period, defaultPeriod)
+	const defaultCooldown = 5 * time.Minute
+	u.Cooldown = gosettings.DefaultComparable(u.Cooldown, defaultCooldown)
 }
 
-func (u *Update) getPeriod(env params.Interface) (warning string, err error) {
-	// Backward compatibility: DELAY
-	s, err := env.Get("DELAY", params.Compulsory())
-	if err == nil {
-		warning = "the environment variable DELAY should be changed to PERIOD"
-		// Backward compatibility: integer only, treated as seconds
-		n, err := strconv.Atoi(s)
-		if err == nil {
-			u.Period = time.Duration(n) * time.Second
-			return warning, nil
-		}
+func (u Update) Validate() (err error) {
+	return nil
+}
 
-		period, err := time.ParseDuration(s)
-		if err == nil {
-			u.Period = period
-			return warning, nil
-		}
-	}
+func (u Update) String() string {
+	return u.toLinesNode().String()
+}
 
-	u.Period, err = env.Duration("PERIOD", params.Default("10m"))
+func (u Update) toLinesNode() *gotree.Node {
+	node := gotree.New("Update")
+	node.Appendf("Period: %s", u.Period)
+	node.Appendf("Cooldown: %s", u.Cooldown)
+	return node
+}
+
+func (u *Update) read(reader *reader.Reader, warner Warner) (err error) {
+	u.Period, err = readUpdatePeriod(reader, warner)
 	if err != nil {
-		return "", fmt.Errorf("%w: for environment variable PERIOD", err)
+		return err
 	}
 
-	return "", err
+	u.Cooldown, err = reader.Duration("UPDATE_COOLDOWN_PERIOD")
+	return err
+}
+
+func readUpdatePeriod(r *reader.Reader, warner Warner) (period time.Duration, err error) {
+	// Retro-compatibility: DELAY variable name
+	delayStringPtr := r.Get("DELAY")
+	if delayStringPtr != nil {
+		handleDeprecated(warner, "DELAY", "PERIOD")
+		// Retro-compatibility: integer only, treated as seconds
+		delayInt, err := strconv.Atoi(*delayStringPtr)
+		if err == nil {
+			return time.Duration(delayInt) * time.Second, nil
+		}
+
+		return time.ParseDuration(*delayStringPtr)
+	}
+
+	return r.Duration("PERIOD")
 }

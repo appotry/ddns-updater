@@ -6,43 +6,51 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/netip"
 	"os"
 	"strings"
 
 	"github.com/qdm12/ddns-updater/internal/models"
-	"github.com/qdm12/ddns-updater/internal/regex"
-	"github.com/qdm12/ddns-updater/internal/settings"
-	"github.com/qdm12/ddns-updater/internal/settings/constants"
+	"github.com/qdm12/ddns-updater/internal/provider"
+	"github.com/qdm12/ddns-updater/internal/provider/constants"
+	"github.com/qdm12/ddns-updater/internal/provider/utils"
 	"github.com/qdm12/ddns-updater/pkg/publicip/ipversion"
-	"github.com/qdm12/golibs/params"
+	"golang.org/x/net/publicsuffix"
 )
 
 type commonSettings struct {
-	Provider  string `json:"provider"`
-	Domain    string `json:"domain"`
-	Host      string `json:"host"`
-	IPVersion string `json:"ip_version"`
+	Provider string `json:"provider"`
+	Domain   string `json:"domain"`
+	// Host is kept for retro-compatibility and is replaced by Owner.
+	Host string `json:"host,omitempty"`
+	// Owner is kept for retro-compatibility and is determined from the
+	// Domain field.
+	Owner      string       `json:"owner,omitempty"`
+	IPVersion  string       `json:"ip_version"`
+	IPv6Suffix netip.Prefix `json:"ipv6_suffix"`
 	// Retro values for warnings
-	IPMethod *string `json:"ip_method,omitempty"`
-	Delay    *uint64 `json:"delay,omitempty"`
+	ProviderIP *bool `json:"provider_ip,omitempty"`
 }
 
-// JSONSettings obtain the update settings from the JSON content, first trying from the environment variable CONFIG
-// and then from the file config.json.
-func (r *reader) JSONSettings(filePath string) (
-	allSettings []settings.Settings, warnings []string, err error) {
-	allSettings, warnings, err = r.getSettingsFromEnv(filePath)
-	if allSettings != nil || warnings != nil || err != nil {
-		return allSettings, warnings, err
+// JSONProviders obtain the update settings from the JSON content,
+// first trying from the environment variable CONFIG and then from
+// the file config.json.
+func (r *Reader) JSONProviders(filePath string) (
+	providers []provider.Provider, warnings []string, err error,
+) {
+	providers, warnings, err = r.getProvidersFromEnv(filePath)
+	if providers != nil || warnings != nil || err != nil {
+		return providers, warnings, err
 	}
-	return r.getSettingsFromFile(filePath)
+	return r.getProvidersFromFile(filePath)
 }
 
 var errWriteConfigToFile = errors.New("cannot write configuration to file")
 
-// getSettingsFromFile obtain the update settings from config.json.
-func (r *reader) getSettingsFromFile(filePath string) (
-	allSettings []settings.Settings, warnings []string, err error) {
+// getProvidersFromFile obtain the update settings from config.json.
+func (r *Reader) getProvidersFromFile(filePath string) (
+	providers []provider.Provider, warnings []string, err error,
+) {
 	r.logger.Info("reading JSON config from file " + filePath)
 	bytes, err := r.readFile(filePath)
 	if err != nil {
@@ -52,11 +60,10 @@ func (r *reader) getSettingsFromFile(filePath string) (
 
 		r.logger.Info("file not found, creating an empty settings file")
 
-		const mode = fs.FileMode(0600)
-
-		err = r.writeFile(filePath, []byte(`{}`), mode)
+		const filePerm = fs.FileMode(0o666)
+		err = r.writeFile(filePath, []byte(`{}`), filePerm)
 		if err != nil {
-			err = fmt.Errorf("%w: %s", errWriteConfigToFile, err)
+			err = fmt.Errorf("%w: %w", errWriteConfigToFile, err)
 		}
 		return nil, nil, err
 	}
@@ -65,14 +72,13 @@ func (r *reader) getSettingsFromFile(filePath string) (
 	return extractAllSettings(bytes)
 }
 
-// getSettingsFromEnv obtain the update settings from the environment variable CONFIG.
+// getProvidersFromEnv obtain the update settings from the environment variable CONFIG.
 // If the settings are valid, they are written to the filePath.
-func (r *reader) getSettingsFromEnv(filePath string) (
-	allSettings []settings.Settings, warnings []string, err error) {
-	s, err := r.env.Get("CONFIG", params.CaseSensitiveValue())
-	if err != nil {
-		return nil, nil, fmt.Errorf("%w: for environment variable CONFIG", err)
-	} else if s == "" {
+func (r *Reader) getProvidersFromEnv(filePath string) (
+	providers []provider.Provider, warnings []string, err error,
+) {
+	s := os.Getenv("CONFIG")
+	if s == "" {
 		return nil, nil, nil
 	}
 	r.logger.Info("reading JSON config from environment variable CONFIG")
@@ -80,22 +86,23 @@ func (r *reader) getSettingsFromEnv(filePath string) (
 
 	b := []byte(s)
 
-	allSettings, warnings, err = extractAllSettings(b)
+	providers, warnings, err = extractAllSettings(b)
 	if err != nil {
-		return allSettings, warnings, fmt.Errorf("configuration given: %w", err)
+		return providers, warnings, fmt.Errorf("configuration given: %w", err)
 	}
 
 	buffer := bytes.NewBuffer(nil)
-	if err := json.Indent(buffer, b, "", "  "); err != nil {
-		return allSettings, warnings, fmt.Errorf("%w: %s", errWriteConfigToFile, err)
-	}
-	const mode = fs.FileMode(0600)
-	err = r.writeFile(filePath, buffer.Bytes(), mode)
+	err = json.Indent(buffer, b, "", "  ")
 	if err != nil {
-		return allSettings, warnings, fmt.Errorf("%w: %s", errWriteConfigToFile, err)
+		return providers, warnings, fmt.Errorf("%w: %w", errWriteConfigToFile, err)
+	}
+	const filePerm = fs.FileMode(0o666)
+	err = r.writeFile(filePath, buffer.Bytes(), filePerm)
+	if err != nil {
+		return providers, warnings, fmt.Errorf("%w: %w", errWriteConfigToFile, err)
 	}
 
-	return allSettings, warnings, nil
+	return providers, warnings, nil
 }
 
 var (
@@ -104,54 +111,83 @@ var (
 )
 
 func extractAllSettings(jsonBytes []byte) (
-	allSettings []settings.Settings, warnings []string, err error) {
+	allProviders []provider.Provider, warnings []string, err error,
+) {
 	config := struct {
 		CommonSettings []commonSettings `json:"settings"`
 	}{}
 	rawConfig := struct {
 		Settings []json.RawMessage `json:"settings"`
 	}{}
-	if err := json.Unmarshal(jsonBytes, &config); err != nil {
-		return nil, nil, fmt.Errorf("%w: %s", errUnmarshalCommon, err)
+	err = json.Unmarshal(jsonBytes, &config)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", errUnmarshalCommon, err)
 	}
-	if err := json.Unmarshal(jsonBytes, &rawConfig); err != nil {
-		return nil, nil, fmt.Errorf("%w: %s", errUnmarshalRaw, err)
+	err = json.Unmarshal(jsonBytes, &rawConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %w", errUnmarshalRaw, err)
 	}
-	matcher := regex.NewMatcher()
+	// TODO(v3): remove retro compatibility with IPV6_PREFIX
+	retroIPv6Suffix, err := getRetroIPv6Suffix()
+	if err != nil {
+		return nil, nil, fmt.Errorf("getting retro-compatible global IPV6 suffix: %w", err)
+	}
 
 	for i, common := range config.CommonSettings {
-		newSettings, newWarnings, err := makeSettingsFromObject(common, rawConfig.Settings[i], matcher)
+		newProvider, newWarnings, err := makeSettingsFromObject(common, rawConfig.Settings[i],
+			retroIPv6Suffix)
 		warnings = append(warnings, newWarnings...)
 		if err != nil {
 			return nil, warnings, err
 		}
-		allSettings = append(allSettings, newSettings...)
+		allProviders = append(allProviders, newProvider...)
 	}
 
-	return allSettings, warnings, nil
+	return allProviders, warnings, nil
 }
 
+var (
+	ErrProviderNoLongerSupported = errors.New("provider no longer supported")
+	ErrProviderMultipleDomains   = errors.New("provider does not support multiple domains")
+)
+
 func makeSettingsFromObject(common commonSettings, rawSettings json.RawMessage,
-	matcher regex.Matcher) (
-	settingsSlice []settings.Settings, warnings []string, err error) {
-	provider := models.Provider(common.Provider)
-	if provider == constants.DuckDNS { // only hosts, no domain
-		if len(common.Domain) > 0 { // retro compatibility
-			if len(common.Host) == 0 {
-				common.Host = strings.TrimSuffix(common.Domain, ".duckdns.org")
-				warnings = append(warnings,
-					fmt.Sprintf("DuckDNS record should have %q specified as host instead of %q as domain",
-						common.Host, common.Domain))
-			} else {
-				warnings = append(warnings,
-					fmt.Sprintf("ignoring domain %q because host %q is specified for DuckDNS record",
-						common.Domain, common.Host))
-			}
+	retroGlobalIPv6Suffix netip.Prefix) (
+	providers []provider.Provider, warnings []string, err error,
+) {
+	if common.Provider == "google" {
+		return nil, nil, fmt.Errorf("%w: %s", ErrProviderNoLongerSupported, common.Provider)
+	}
+
+	if common.Owner == "" { // retro compatibility
+		common.Owner = common.Host
+	}
+
+	var domain string
+	var owners []string
+	if common.Owner != "" { // retro compatibility
+		owners = strings.Split(common.Owner, ",")
+		domain = common.Domain // single domain only
+		domains := make([]string, len(owners))
+		for i, owner := range owners {
+			domains[i] = utils.BuildURLQueryHostname(owner, common.Domain)
+		}
+		warnings = append(warnings,
+			fmt.Sprintf("you can specify the owner %q directly in the domain field as %q",
+				common.Owner, strings.Join(domains, ",")))
+	} else { // extract owner(s) from domain(s)
+		domain, owners, err = extractFromDomainField(common.Domain)
+		if err != nil {
+			return nil, nil, fmt.Errorf("extracting owners from domains: %w", err)
 		}
 	}
-	hosts := strings.Split(common.Host, ",")
 
-	if len(common.IPVersion) == 0 {
+	if common.Provider == string(constants.Myaddr) && len(owners) > 1 {
+		return nil, nil, fmt.Errorf("%w: %s for parent domain %q",
+			ErrProviderMultipleDomains, common.Provider, domain)
+	}
+
+	if common.IPVersion == "" {
 		common.IPVersion = ipversion.IP4or6.String()
 	}
 	ipVersion, err := ipversion.Parse(common.IPVersion)
@@ -159,13 +195,65 @@ func makeSettingsFromObject(common commonSettings, rawSettings json.RawMessage,
 		return nil, nil, err
 	}
 
-	settingsSlice = make([]settings.Settings, len(hosts))
-	for i, host := range hosts {
-		settingsSlice[i], err = settings.New(provider, rawSettings, common.Domain,
-			host, ipVersion, matcher)
+	ipv6Suffix := common.IPv6Suffix
+	if !ipv6Suffix.IsValid() {
+		ipv6Suffix = retroGlobalIPv6Suffix
+	}
+
+	if ipVersion == ipversion.IP4 && ipv6Suffix.IsValid() {
+		warnings = append(warnings,
+			fmt.Sprintf("IPv6 suffix specified as %s but IP version is %s",
+				ipv6Suffix, ipVersion))
+	}
+
+	if common.ProviderIP != nil {
+		warning := fmt.Sprintf("for domain %s and ip version %s: "+
+			`the field "provider_ip" is deprecated and no longer used`,
+			domain, ipVersion)
+		warnings = append(warnings, warning)
+	}
+
+	providerName := models.Provider(common.Provider)
+	if providerName == constants.Hetzner {
+		warnings = append(warnings,
+			"You should use the hetznercloud with the new Hetzner Cloud console instead, "+
+				"given this legacy Hetzner API is going to be shutdown soon.")
+	}
+	providers = make([]provider.Provider, len(owners))
+	for i, owner := range owners {
+		owner = strings.TrimSpace(owner)
+		providers[i], err = provider.New(providerName, rawSettings, domain,
+			owner, ipVersion, ipv6Suffix)
 		if err != nil {
 			return nil, warnings, err
 		}
 	}
-	return settingsSlice, warnings, nil
+	return providers, warnings, nil
+}
+
+var ErrMultipleDomainsSpecified = errors.New("multiple domains specified")
+
+func extractFromDomainField(domainField string) (domainRegistered string,
+	owners []string, err error,
+) {
+	domains := strings.Split(domainField, ",")
+	owners = make([]string, len(domains))
+	for i, domain := range domains {
+		newDomainRegistered, err := publicsuffix.EffectiveTLDPlusOne(domain)
+		switch {
+		case err != nil:
+			return "", nil, fmt.Errorf("extracting effective TLD+1: %w", err)
+		case domainRegistered == "":
+			domainRegistered = newDomainRegistered
+		case domainRegistered != newDomainRegistered:
+			return "", nil, fmt.Errorf("%w: %q and %q",
+				ErrMultipleDomainsSpecified, domainRegistered, newDomainRegistered)
+		}
+		if domain == domainRegistered {
+			owners[i] = "@"
+			continue
+		}
+		owners[i] = strings.TrimSuffix(domain, "."+domainRegistered)
+	}
+	return domainRegistered, owners, nil
 }

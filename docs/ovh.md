@@ -10,11 +10,10 @@
     {
       "provider": "ovh",
       "domain": "domain.com",
-      "host": "@",
       "username": "username",
       "password": "password",
       "ip_version": "ipv4",
-      "provider_ip": true
+      "ipv6_suffix": ""
     }
   ]
 }
@@ -22,8 +21,7 @@
 
 ### Compulsory parameters
 
-- `"domain"`
-- `"host"` is your host and can be a subdomain or `"@"`
+- `"domain"` is the domain to update. It can be `example.com` (root domain) or `sub.example.com` (subdomain of `example.com`).
 
 #### Using DynHost
 
@@ -35,14 +33,14 @@
 - `"api_endpoint"` default value is `"ovh-eu"`
 - `"app_key"` which you can create at [eu.api.ovh.com/createApp](https://eu.api.ovh.com/createApp/)
 - `"app_secret"`
-- `"consumer_key"`
+- `"consumer_key"` which you can get at [www.ovh.com/auth/api/createToken](https://www.ovh.com/auth/api/createToken)
 
 The ZoneDNS implementation allows you to update any record name including *.yourdomain.tld
 
 ### Optional parameters
 
-- `"ip_version"` can be `ipv4` (A records) or `ipv6` (AAAA records), defaults to `ipv4 or ipv6`
-- `"provider_ip"` can be set to `true` to let your DNS provider determine your IPv4 address (and/or IPv6 address) automatically when you send an update request, without sending the new IP address detected by the program in the request.
+- `"ip_version"` can be `ipv4` (A records), or `ipv6` (AAAA records) or `ipv4 or ipv6` (update one of the two, depending on the public ip found). It defaults to `ipv4 or ipv6`.
+- `"ipv6_suffix"` is the IPv6 interface identifier suffix to use. It can be for example `0:0:0:0:72ad:8fbb:a54e:bedd/64`. If left empty, it defaults to no suffix and the raw temporary IPv6 address of the machine is used in the record updating. You might want to set this to use your permanent IPv6 address instead of your temporary IPv6 address.
 - `"mode"` select between two modes, OVH's dynamic hosting service (`"dynamic"`) or OVH's API (`"api"`). Default is `"dynamic"`
 
 ## Domain setup

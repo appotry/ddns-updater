@@ -6,43 +6,37 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/qdm12/ddns-updater/internal/settings/utils"
+	"github.com/qdm12/ddns-updater/internal/provider/utils"
 )
 
-//go:generate mockgen -destination=mock_$GOPACKAGE/$GOFILE . Logger
+//go:generate mockgen -destination=mock_$GOPACKAGE/$GOFILE . DebugLogger
 
-type Logger interface {
+type DebugLogger interface {
 	Debug(s string)
 }
 
-func makeLogClient(client *http.Client, logger Logger) (newClient *http.Client) {
-	newClient = &http.Client{
-		Timeout: client.Timeout,
+func makeLogClient(client *http.Client, logger DebugLogger) *http.Client {
+	transport := client.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
 	}
 
-	originalTransport := client.Transport
-	if originalTransport == nil {
-		originalTransport = http.DefaultTransport
-	}
-
-	transport := originalTransport.(*http.Transport)
-	clonedTransport := transport.Clone()
-
-	newClient.Transport = &loggingRoundTripper{
-		proxied: clonedTransport,
+	client.Transport = &loggingRoundTripper{
+		proxied: transport,
 		logger:  logger,
 	}
 
-	return newClient
+	return client
 }
 
 type loggingRoundTripper struct {
 	proxied http.RoundTripper
-	logger  Logger
+	logger  DebugLogger
 }
 
 func (lrt *loggingRoundTripper) RoundTrip(request *http.Request) (
-	response *http.Response, err error) {
+	response *http.Response, err error,
+) {
 	lrt.logger.Debug(requestToString(request))
 
 	response, err = lrt.proxied.RoundTrip(request)
@@ -97,7 +91,8 @@ func headerToString(header http.Header) (s string) {
 }
 
 func readAndResetBody(body io.ReadCloser) (
-	newBody io.ReadCloser, bodyString string) {
+	newBody io.ReadCloser, bodyString string,
+) {
 	b, err := io.ReadAll(body)
 	if err != nil {
 		bodyString = "error reading body: " + err.Error()

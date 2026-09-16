@@ -9,10 +9,10 @@
   "settings": [
     {
       "provider": "freedns",
-      "domain": "domain.com",
-      "host": "host",
+      "domain": "sub.domain.com",
       "token": "token",
-      "ip_version": "ipv4"
+      "ip_version": "ipv4",
+      "ipv6_suffix": ""
     }
   ]
 }
@@ -20,14 +20,15 @@
 
 ### Compulsory parameters
 
-- `"domain"`
-- `"host"` is your host (subdomain)
+- `"domain"` is the domain to update. It can be `example.com` (root domain) or `sub.example.com` (subdomain of `example.com`).
 - `"token"` is the randomized update token you use to update your record
 
 ### Optional parameters
 
-- `"ip_version"` can be `ipv4` (A records) or `ipv6` (AAAA records), defaults to `ipv4 or ipv6`
+- `"ip_version"` can be `ipv4` (A records), or `ipv6` (AAAA records) or `ipv4 or ipv6` (update one of the two, depending on the public ip found). It defaults to `ipv4 or ipv6`.
+- `"ipv6_suffix"` is the IPv6 interface identifier suffix to use. It can be for example `0:0:0:0:72ad:8fbb:a54e:bedd/64`. If left empty, it defaults to no suffix and the raw temporary IPv6 address of the machine is used in the record updating. You might want to set this to use your permanent IPv6 address instead of your temporary IPv6 address.
 
 ## Domain setup
 
-This integration uses FreeDNS's v2 dynamic dns interface, which is not shown by default when you select `Dynamic DNS` from the side menu. Instead you must go to https://freedns.afraid.org/dynamic/v2/ and enable dynamic DNS for the subdomains you wish and you will then see a url like `https://sync.afraid.org/u/token/` for each enabled subdomain.
+This integration uses FreeDNS's v2 dynamic dns interface, which is not shown by default when you select `Dynamic DNS` from the side menu.
+Instead you must go to [freedns.afraid.org/dynamic/v2/](https://freedns.afraid.org/dynamic/v2/) and enable dynamic DNS for the subdomains you wish and you will then see a url like `https://sync.afraid.org/u/token/` for each enabled subdomain.

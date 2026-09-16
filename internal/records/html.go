@@ -11,25 +11,25 @@ import (
 
 func (r *Record) HTML(now time.Time) models.HTMLRow {
 	const NotAvailable = "N/A"
-	row := r.Settings.HTML()
+	row := r.Provider.HTML()
 	message := r.Message
 	if r.Status == constants.UPTODATE {
 		message = "no IP change for " + r.History.GetDurationSinceSuccess(now)
 	}
-	if len(message) > 0 {
+	if message != "" {
 		message = fmt.Sprintf("(%s)", message)
 	}
-	if len(r.Status) == 0 {
+	if r.Status == "" {
 		row.Status = NotAvailable
 	} else {
-		row.Status = models.HTML(fmt.Sprintf("%s %s, %s",
+		row.Status = fmt.Sprintf("%s %s, %s",
 			convertStatus(r.Status),
 			message,
-			time.Since(r.Time).Round(time.Second).String()+" ago"))
+			time.Since(r.Time).Round(time.Second).String()+" ago")
 	}
 	currentIP := r.History.GetCurrentIP()
-	if currentIP != nil {
-		row.CurrentIP = models.HTML(`<a href="https://ipinfo.io/"` + currentIP.String() + `\>` + currentIP.String() + "</a>")
+	if currentIP.IsValid() {
+		row.CurrentIP = `<a href="https://ipinfo.io/` + currentIP.String() + `">` + currentIP.String() + "</a>"
 	} else {
 		row.CurrentIP = NotAvailable
 	}
@@ -45,23 +45,23 @@ func (r *Record) HTML(now time.Time) models.HTMLRow {
 			}
 			previousIPsStr = append(previousIPsStr, previousIP.String())
 		}
-		row.PreviousIPs = models.HTML(strings.Join(previousIPsStr, ", "))
+		row.PreviousIPs = strings.Join(previousIPsStr, ", ")
 	}
 	return row
 }
 
-func convertStatus(status models.Status) models.HTML {
+func convertStatus(status models.Status) string {
 	switch status {
 	case constants.SUCCESS:
-		return `<font color="green"><b>Success</b></font>`
+		return `<span class="success">Success</span>`
 	case constants.FAIL:
-		return `<font color="red"><b>Failure</b></font>`
+		return `<span class="error">Failure</span>`
 	case constants.UPTODATE:
-		return `<font color="#00CC66"><b>Up to date</b></font>`
+		return `<span class="uptodate">Up to date</span>`
 	case constants.UPDATING:
-		return `<font color="orange"><b>Updating</b></font>`
+		return `<span class="updating">Updating</span>`
 	case constants.UNSET:
-		return `<font color="purple"><b>Unset</b></font>`
+		return `<span class="unset">Unset</span>`
 	default:
 		return "Unknown status"
 	}

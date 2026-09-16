@@ -3,21 +3,21 @@ package server
 import (
 	"context"
 	"embed"
+	"io/fs"
 	"net/http"
+	"strings"
 	"text/template"
 	"time"
 
-	"github.com/go-chi/chi"
-	"github.com/go-chi/chi/middleware"
-	"github.com/qdm12/ddns-updater/internal/data"
-	"github.com/qdm12/ddns-updater/internal/update"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 type handlers struct {
-	ctx context.Context
+	ctx context.Context //nolint:containedctx
 	// Objects
-	db            data.Database
-	runner        update.Runner
+	db            Database
+	runner        UpdateForcer
 	indexTemplate *template.Template
 	// Mockable functions
 	timeNow func() time.Time
@@ -27,8 +27,14 @@ type handlers struct {
 var uiFS embed.FS
 
 func newHandler(ctx context.Context, rootURL string,
-	db data.Database, runner update.Runner) http.Handler {
+	db Database, runner UpdateForcer,
+) http.Handler {
 	indexTemplate := template.Must(template.ParseFS(uiFS, "ui/index.html"))
+
+	staticFolder, err := fs.Sub(uiFS, "ui/static")
+	if err != nil {
+		panic(err)
+	}
 
 	handlers := &handlers{
 		ctx:           ctx,
@@ -41,11 +47,18 @@ func newHandler(ctx context.Context, rootURL string,
 
 	router := chi.NewRouter()
 
+	router.Use(middleware.ClientIPFromRemoteAddr)
 	router.Use(middleware.Logger)
+	rootURL = strings.TrimSuffix(rootURL, "/")
 
+	if rootURL != "" {
+		router.Handle(rootURL, http.RedirectHandler(rootURL+"/", http.StatusPermanentRedirect))
+	}
 	router.Get(rootURL+"/", handlers.index)
 
 	router.Get(rootURL+"/update", handlers.update)
+
+	router.Handle(rootURL+"/static/*", http.StripPrefix(rootURL+"/static/", http.FileServerFS(staticFolder)))
 
 	return router
 }

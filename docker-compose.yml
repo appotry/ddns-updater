@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   ddns-updater:
-    image: qmcgaw/ddns-updater
+    image: ghcr.io/qdm12/ddns-updater
     container_name: ddns-updater
     network_mode: bridge
     ports:
@@ -21,7 +21,7 @@ services:
       - HTTP_TIMEOUT=10s
 
       # Web UI
-      - LISTENING_PORT=8000
+      - LISTENING_ADDRESS=:8000
       - ROOT_URL=/
 
       # Backup

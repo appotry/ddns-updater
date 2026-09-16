@@ -1,23 +1,10 @@
 package dns
 
-import (
-	"context"
-	"net"
+import "time"
 
-	"github.com/miekg/dns"
-)
-
-type Fetcher interface {
-	IP(ctx context.Context) (publicIP net.IP, err error)
-	IP4(ctx context.Context) (publicIP net.IP, err error)
-	IP6(ctx context.Context) (publicIP net.IP, err error)
-}
-
-type fetcher struct {
+type Fetcher struct {
 	ring    ring
-	client  Client
-	client4 Client
-	client6 Client
+	timeout time.Duration
 }
 
 type ring struct {
@@ -26,37 +13,20 @@ type ring struct {
 	providers []Provider
 }
 
-func New(options ...Option) (f Fetcher, err error) {
+func New(options ...Option) (f *Fetcher, err error) {
 	settings := newDefaultSettings()
 	for _, option := range options {
-		if err := option(&settings); err != nil {
+		err = option(&settings)
+		if err != nil {
 			return nil, err
 		}
 	}
 
-	dialer := &net.Dialer{
-		Timeout: settings.timeout,
-	}
-
-	return &fetcher{
+	return &Fetcher{
 		ring: ring{
 			counter:   new(uint32),
 			providers: settings.providers,
 		},
-		client: &dns.Client{
-			Net:     "udp",
-			Dialer:  dialer,
-			Timeout: settings.timeout,
-		},
-		client4: &dns.Client{
-			Net:     "udp4",
-			Dialer:  dialer,
-			Timeout: settings.timeout,
-		},
-		client6: &dns.Client{
-			Net:     "udp6",
-			Dialer:  dialer,
-			Timeout: settings.timeout,
-		},
+		timeout: settings.timeout,
 	}, nil
 }

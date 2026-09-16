@@ -1,21 +1,18 @@
 package health
 
 import (
+	"context"
 	"net/http"
-
-	"github.com/qdm12/golibs/logging"
 )
 
-func newHandler(logger logging.Logger, healthcheck func() error) http.Handler {
+func newHandler(healthcheck func(context.Context) error) http.Handler {
 	return &handler{
-		logger:      logger,
 		healthcheck: healthcheck,
 	}
 }
 
 type handler struct {
-	logger      logging.Logger
-	healthcheck func() error
+	healthcheck func(context.Context) error
 }
 
 func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -23,7 +20,8 @@ func (h *handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 		return
 	}
-	if err := h.healthcheck(); err != nil {
+	err := h.healthcheck(r.Context())
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

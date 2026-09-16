@@ -27,22 +27,22 @@ func Test_SetProviders(t *testing.T) {
 		expectedSettings settings
 		err              error
 	}{
-		"Google": {
+		"OpenDNS": {
 			initialSettings: settings{
 				providers: []Provider{Cloudflare},
 			},
-			providers: []Provider{Google},
+			providers: []Provider{OpenDNS},
 			expectedSettings: settings{
-				providers: []Provider{Google},
+				providers: []Provider{OpenDNS},
 			},
 		},
-		"Google and Cloudflare": {
+		"OpenDNS and Cloudflare": {
 			initialSettings: settings{
 				providers: []Provider{Cloudflare},
 			},
-			providers: []Provider{Google, Cloudflare},
+			providers: []Provider{OpenDNS, Cloudflare},
 			expectedSettings: settings{
-				providers: []Provider{Cloudflare, Google},
+				providers: []Provider{Cloudflare, OpenDNS},
 			},
 		},
 		"invalid provider": {
@@ -53,12 +53,11 @@ func Test_SetProviders(t *testing.T) {
 			expectedSettings: settings{
 				providers: []Provider{Cloudflare},
 			},
-			err: errors.New("unknown provider: invalid"),
+			err: errors.New("unknown public IP echo DNS provider: invalid"),
 		},
 	}
 
 	for name, testCase := range testCases {
-		testCase := testCase
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 

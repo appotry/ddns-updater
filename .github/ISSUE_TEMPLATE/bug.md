@@ -1,9 +1,8 @@
 ---
 name: Bug
 about: Report a bug
-title: 'Bug: ...'
-labels: ":bug: bug"
-assignees: qdm12
+title: 'Bug: FILL THIS TEXT OR ISSUE WILL BE CLOSED'
+labels:
 
 ---
 
